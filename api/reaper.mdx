@@ -85,7 +85,7 @@ Creates a new Reaper instance with the specified configuration.
 
 ```typescript
 import { Reaper } from '@platformatic/job-queue'
-import { RedisStorage } from '@platformatic/job-queue/storage/redis'
+import { RedisStorage } from '@platformatic/job-queue'
 import pino from 'pino'
 
 const storage = new RedisStorage({ url: 'redis://localhost:6379' })
@@ -237,7 +237,7 @@ For development or simple deployments with a single worker:
 
 ```typescript
 import { Queue, Reaper } from '@platformatic/job-queue'
-import { RedisStorage } from '@platformatic/job-queue/storage/redis'
+import { RedisStorage } from '@platformatic/job-queue'
 
 const storage = new RedisStorage({ url: 'redis://localhost:6379' })
 
@@ -272,7 +272,7 @@ For production deployments with multiple workers and Reaper instances:
 
 ```typescript
 import { Reaper } from '@platformatic/job-queue'
-import { RedisStorage } from '@platformatic/job-queue/storage/redis'
+import { RedisStorage } from '@platformatic/job-queue'
 import pino from 'pino'
 
 const storage = new RedisStorage({ url: 'redis://localhost:6379' })
@@ -324,7 +324,7 @@ You can run the Reaper in a separate process from your workers:
 ```typescript
 // reaper-service.ts
 import { Reaper } from '@platformatic/job-queue'
-import { RedisStorage } from '@platformatic/job-queue/storage/redis'
+import { RedisStorage } from '@platformatic/job-queue'
 import pino from 'pino'
 
 const logger = pino()
