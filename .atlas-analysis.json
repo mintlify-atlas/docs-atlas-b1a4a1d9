@@ -1,0 +1,98 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Platformatic Job Queue",
+  "projectDescription": "A reliable job queue for Node.js with deduplication, request/response support, and pluggable storage backends",
+  "theme": "aspen",
+  "primaryColor": "#848c8e",
+  "lightColor": "#11161e",
+  "darkColor": "#cfd0d2",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/queue",
+              "concepts/storage-backends",
+              "concepts/deduplication",
+              "concepts/request-response",
+              "concepts/reaper"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/producer-consumer",
+              "guides/graceful-shutdown",
+              "guides/error-handling",
+              "guides/custom-serialization",
+              "guides/leader-election"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core",
+            "pages": [
+              "api/queue",
+              "api/reaper"
+            ]
+          },
+          {
+            "group": "Storage",
+            "pages": [
+              "api/storage/memory-storage",
+              "api/storage/redis-storage",
+              "api/storage/file-storage"
+            ]
+          },
+          {
+            "group": "Types & Errors",
+            "pages": [
+              "api/types",
+              "api/errors",
+              "api/serialization"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Job deduplication with configurable result caching",
+    "Request/response pattern with enqueueAndWait",
+    "Multiple storage backends: Redis/Valkey, filesystem, in-memory",
+    "Automatic retries with exponential backoff",
+    "Stalled job recovery with Reaper",
+    "Graceful shutdown with in-flight job completion",
+    "TypeScript native with full type safety",
+    "Leader election for high availability"
+  ],
+  "publicApiSurface": [
+    "Queue",
+    "Reaper",
+    "MemoryStorage",
+    "RedisStorage",
+    "FileStorage",
+    "JsonSerde",
+    "TimeoutError",
+    "MaxRetriesError",
+    "JobNotFoundError",
+    "JobCancelledError",
+    "JobFailedError",
+    "StorageError"
+  ]
+}
