@@ -1,0 +1,97 @@
+---
+title: Introduction
+description: A reliable job queue for Node.js with deduplication, request/response support, and pluggable storage backends
+---
+
+# Introduction
+
+Platformatic Job Queue is a reliable job queue for Node.js applications that provides deduplication, request/response support, and pluggable storage backends. Built with TypeScript and designed for production workloads, it offers a clean API for background job processing with automatic retries, graceful shutdown, and stalled job recovery.
+
+## What is Platformatic Job Queue?
+
+Platformatic Job Queue is a modern job queue library that helps you build reliable distributed systems by:
+
+- **Preventing duplicate work** through built-in deduplication with configurable result caching
+- **Supporting request/response patterns** with `enqueueAndWait()` for jobs that need to return results
+- **Adapting to your infrastructure** with pluggable storage backends (Redis/Valkey, filesystem, or in-memory)
+- **Ensuring reliability** with automatic retries, exponential backoff, and stalled job recovery
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Deduplication" icon="copy">
+    Prevents duplicate job processing with configurable result caching. Jobs with the same ID are processed only once.
+  </Card>
+  
+  <Card title="Request/Response" icon="reply">
+    Enqueue jobs and wait for results with `enqueueAndWait()`. Perfect for async RPC patterns.
+  </Card>
+  
+  <Card title="Multiple Storage Backends" icon="database">
+    Choose from Redis/Valkey for production, filesystem for single-node deployments, or in-memory for development.
+  </Card>
+  
+  <Card title="Automatic Retries" icon="rotate">
+    Configurable retry attempts with exponential backoff for handling transient failures.
+  </Card>
+  
+  <Card title="Stalled Job Recovery" icon="heart-pulse">
+    Reaper automatically recovers jobs from crashed workers, ensuring no work is lost.
+  </Card>
+  
+  <Card title="Graceful Shutdown" icon="power-off">
+    Complete in-flight jobs before stopping, preventing data loss during deployments.
+  </Card>
+  
+  <Card title="TypeScript Native" icon="code">
+    Full type safety with generic payload and result types. Uses Node.js 22.19+ native TypeScript.
+  </Card>
+  
+  <Card title="Production Ready" icon="shield-check">
+    Battle-tested with atomic operations, pub/sub notifications, and leader election for high availability.
+  </Card>
+</CardGroup>
+
+## When to Use This Library
+
+Platformatic Job Queue is ideal for:
+
+- **Background processing**: Send emails, generate reports, process uploads
+- **Distributed workflows**: Coordinate work across multiple services
+- **Deduplication**: Ensure expensive operations run only once
+- **Request/response patterns**: Async RPC between services
+- **Reliable task execution**: With automatic retries and recovery
+
+<Note>
+Platformatic Job Queue is designed for Node.js 22.19+ and uses native TypeScript type stripping for zero-overhead type safety.
+</Note>
+
+## System Requirements
+
+- **Node.js**: 22.19.0 or later (for native TypeScript support)
+- **Redis/Valkey**: Redis 7+ or Valkey 8+ (for RedisStorage backend)
+- **Optional Dependencies**:
+  - `iovalkey` - For Redis/Valkey storage (automatically installed when needed)
+  - `fast-write-atomic` - For FileStorage backend (automatically installed when needed)
+
+## Architecture
+
+The library is built around several core components:
+
+- **Queue**: Combines producer and consumer functionality in a single class
+- **Producer**: Enqueues jobs and manages result waiting
+- **Consumer**: Processes jobs with configurable concurrency
+- **Storage**: Pluggable backend (Memory, Redis/Valkey, or Filesystem)
+- **Reaper**: Monitors and recovers stalled jobs (optional)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install the library and set up your environment
+  </Card>
+  
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Build your first queue in 5 minutes
+  </Card>
+</CardGroup>

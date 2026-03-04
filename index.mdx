@@ -1,97 +1,253 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: Platformatic Job Queue Documentation
+description: A reliable job queue for Node.js with deduplication, request/response support, and pluggable storage backends
+mode: custom
 ---
 
-## Setting up
+<div className="relative overflow-hidden bg-gradient-to-br from-[#020627] via-[#0a0f2e] to-[#020627] dark:from-[#020627] dark:via-[#0a0f2e] dark:to-[#020627] py-20 lg:py-24">
+  <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff08_1px,transparent_1px),linear-gradient(to_bottom,#ffffff08_1px,transparent_1px)] bg-[size:4rem_4rem]"></div>
+  <div className="relative max-w-6xl mx-auto px-6 sm:px-8">
+    <div className="max-w-3xl">
+      <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6">
+        Reliable Job Queue for Node.js
+      </h1>
+      <p className="text-lg sm:text-xl text-gray-300 dark:text-gray-300 mb-8 max-w-2xl">
+        Build scalable background processing with deduplication, request/response patterns, and pluggable storage. Production-ready with TypeScript support.
+      </p>
+      <div className="flex flex-wrap gap-4">
+        <a 
+          href="/quickstart" 
+          className="inline-flex items-center justify-center px-6 py-3 text-base font-semibold text-white bg-[#529c3a] hover:bg-[#468530] rounded-lg transition-colors no-underline"
+        >
+          Get Started
+        </a>
+        <a 
+          href="/api/queue" 
+          className="inline-flex items-center justify-center px-6 py-3 text-base font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/30 rounded-lg transition-colors no-underline"
+        >
+          API Reference
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-3">
+    Quick start
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Get your first job queue running in minutes
+  </p>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+  <Steps>
+    <Step title="Install the package">
+      Install `@platformatic/job-queue` from npm:
 
-## Make it yours
+      <CodeGroup>
+      ```bash npm
+      npm install @platformatic/job-queue
+      ```
+      ```bash yarn
+      yarn add @platformatic/job-queue
+      ```
+      ```bash pnpm
+      pnpm add @platformatic/job-queue
+      ```
+      </CodeGroup>
+    </Step>
 
-Design a docs site that looks great and empowers your users.
+    <Step title="Create a queue with storage">
+      Choose a storage backend. For development, use `MemoryStorage`:
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+      ```typescript
+      import { Queue, MemoryStorage } from '@platformatic/job-queue'
 
-## Create beautiful pages
+      const storage = new MemoryStorage()
+      const queue = new Queue({
+        storage,
+        concurrency: 5
+      })
+      ```
 
-Everything you need to create world-class documentation.
+      For production, use `RedisStorage` for distributed workloads:
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+      ```typescript
+      import { Queue, RedisStorage } from '@platformatic/job-queue'
 
-## Need inspiration?
+      const storage = new RedisStorage({
+        url: 'redis://localhost:6379'
+      })
+      const queue = new Queue({
+        storage,
+        concurrency: 10
+      })
+      ```
+    </Step>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+    <Step title="Register a job handler">
+      Define how your jobs are processed:
+
+      ```typescript
+      queue.execute(async (job) => {
+        console.log(`Processing job ${job.id}:`, job.payload)
+        
+        // Your business logic here
+        const result = await processEmail(job.payload.email)
+        
+        return { sent: true, messageId: result.id }
+      })
+      ```
+    </Step>
+
+    <Step title="Start the queue and enqueue jobs">
+      Start processing and add jobs to the queue:
+
+      ```typescript
+      await queue.start()
+
+      // Fire-and-forget
+      await queue.enqueue('email-1', { 
+        email: 'user@example.com' 
+      })
+
+      // Wait for result
+      const result = await queue.enqueueAndWait('email-2', {
+        email: 'another@example.com'
+      }, { timeout: 30000 })
+
+      console.log('Result:', result)
+      ```
+
+      <Accordion title="View complete example">
+      ```typescript
+      import { Queue, MemoryStorage } from '@platformatic/job-queue'
+
+      const storage = new MemoryStorage()
+      const queue = new Queue({
+        storage,
+        concurrency: 5
+      })
+
+      queue.execute(async (job) => {
+        console.log(`Processing job ${job.id}:`, job.payload)
+        return { sent: true }
+      })
+
+      await queue.start()
+
+      // Enqueue jobs
+      await queue.enqueue('email-1', { email: 'user@example.com' })
+      
+      // Or wait for result
+      const result = await queue.enqueueAndWait('email-2', { 
+        email: 'another@example.com' 
+      })
+      
+      console.log('Result:', result)
+
+      // Graceful shutdown
+      await queue.stop()
+      ```
+      </Accordion>
+    </Step>
+  </Steps>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-3">
+    Key features
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Everything you need for production-grade background processing
+  </p>
+
+  <CardGroup cols={2}>
+    <Card title="Job deduplication" icon="fingerprint" href="/concepts/deduplication">
+      Prevent duplicate job processing with configurable result caching
+    </Card>
+    <Card title="Request/Response" icon="arrows-rotate" href="/concepts/request-response">
+      Enqueue jobs and wait for results with `enqueueAndWait()`
+    </Card>
+    <Card title="Multiple storage backends" icon="database" href="/concepts/storage-backends">
+      Redis/Valkey for distributed systems, filesystem for single-node, or in-memory for testing
+    </Card>
+    <Card title="Automatic retries" icon="rotate-right" href="/guides/error-handling">
+      Configurable retry attempts with exponential backoff for failed jobs
+    </Card>
+    <Card title="Stalled job recovery" icon="shield-halved" href="/concepts/reaper">
+      Reaper automatically recovers jobs from crashed workers
+    </Card>
+    <Card title="Graceful shutdown" icon="circle-stop" href="/guides/graceful-shutdown">
+      Complete in-flight jobs before stopping for zero data loss
+    </Card>
+    <Card title="TypeScript native" icon="code" href="/api/types">
+      Full type safety with generic payload and result types
+    </Card>
+    <Card title="Leader election" icon="crown" href="/guides/leader-election">
+      High availability with automatic failover for Reaper instances
+    </Card>
+  </CardGroup>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-3">
+    Explore by topic
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Deep dive into core concepts and advanced patterns
+  </p>
+
+  <CardGroup cols={3}>
+    <Card title="Queue" icon="list-check" href="/concepts/queue">
+      Understand the Queue class and configuration options
+    </Card>
+    <Card title="Storage backends" icon="server" href="/concepts/storage-backends">
+      Compare MemoryStorage, RedisStorage, and FileStorage
+    </Card>
+    <Card title="Producer/Consumer" icon="diagram-project" href="/guides/producer-consumer">
+      Separate job enqueuers from workers for scalability
+    </Card>
+    <Card title="Error handling" icon="triangle-exclamation" href="/guides/error-handling">
+      Handle job failures with typed errors and retries
+    </Card>
+    <Card title="Custom serialization" icon="file-code" href="/guides/custom-serialization">
+      Use MessagePack or custom formats for job payloads
+    </Card>
+    <Card title="Reaper" icon="broom" href="/concepts/reaper">
+      Recover stalled jobs and ensure reliability
+    </Card>
+  </CardGroup>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-[#27272a] bg-gray-50 dark:bg-[#1a1d27] p-8 sm:p-12">
+    <div className="relative z-10 max-w-2xl">
+      <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4">
+        Ready to build?
+      </h2>
+      <p className="text-base text-gray-600 dark:text-gray-400 mb-6">
+        Start processing background jobs with confidence. Check out the quickstart guide or explore the full API reference.
+      </p>
+      <div className="flex flex-wrap gap-4">
+        <a 
+          href="/quickstart" 
+          className="inline-flex items-center justify-center px-6 py-3 text-base font-semibold text-white bg-[#529c3a] hover:bg-[#468530] rounded-lg transition-colors no-underline"
+        >
+          Get Started
+        </a>
+        <a 
+          href="/api/queue" 
+          className="inline-flex items-center justify-center px-6 py-3 text-base font-semibold text-gray-900 dark:text-white bg-transparent hover:bg-gray-100 dark:hover:bg-[#242838] border border-gray-300 dark:border-[#27272a] rounded-lg transition-colors no-underline"
+        >
+          View API Docs
+        </a>
+      </div>
+    </div>
+    <div className="absolute top-0 right-0 -mt-4 -mr-4 h-32 w-32 opacity-10">
+      <svg viewBox="0 0 100 100" className="text-[#529c3a]" fill="currentColor">
+        <circle cx="50" cy="50" r="40" />
+      </svg>
+    </div>
+  </div>
+</div>

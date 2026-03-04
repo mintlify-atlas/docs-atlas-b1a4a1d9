@@ -1,80 +1,314 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Build your first job queue in 5 minutes with Platformatic Job Queue
 ---
 
-## Get started in three steps
+# Quick Start
 
-Get your documentation site running locally and make your first customization.
+This guide walks you through creating a complete working job queue from scratch. You'll learn how to create a queue, register a handler, enqueue jobs, and handle results.
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+- Node.js 22.19.0 or later installed
+- `@platformatic/job-queue` package installed ([Installation Guide](/installation))
+
+## Complete Example
+
+Let's build an email processing queue that demonstrates all core features:
+
+<Steps>
+  <Step title="Create the queue with storage">
+    First, import the required classes and create a queue with in-memory storage:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```typescript index.ts
+    import { Queue, MemoryStorage } from '@platformatic/job-queue'
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    // Create a queue with in-memory storage
+    const storage = new MemoryStorage()
+    const queue = new Queue<{ email: string }, { sent: boolean }>({
+      storage,
+      concurrency: 5
+    })
+    ```
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
+    <Note>
+    The generic types `<TPayload, TResult>` provide full type safety for your job data and results.
+    </Note>
+  </Step>
+  
+  <Step title="Register a job handler">
+    Define how your queue should process jobs:
+    
+    ```typescript index.ts
+    // Register a job handler
+    queue.execute(async (job) => {
+      console.log(`Processing job ${job.id}:`, job.payload)
+      // Send email...
+      return { sent: true }
+    })
+    ```
+    
+    The handler receives a `Job` object with:
+    - `id` - Unique job identifier
+    - `payload` - The job data (typed as `{ email: string }`)
+    - `attempts` - Current attempt number (starts at 1)
+    - `signal` - AbortSignal for cancellation
+  </Step>
+  
+  <Step title="Start the queue">
+    Connect to storage and start processing:
+    
+    ```typescript index.ts
+    // Start the queue
+    await queue.start()
+    console.log('Queue started and ready to process jobs')
+    ```
+  </Step>
+  
+  <Step title="Enqueue jobs (fire-and-forget)">
+    Add jobs to the queue without waiting for results:
+    
+    ```typescript index.ts
+    // Enqueue jobs
+    await queue.enqueue('email-1', { email: 'user@example.com' })
+    console.log('Job enqueued')
+    
+    // Optional per-job TTL override for cached result/error
+    await queue.enqueue('email-ttl', { email: 'ttl@example.com' }, {
+      resultTTL: 5 * 60 * 1000 // 5 minutes
+    })
+    ```
+    
+    <Tip>
+    Jobs are deduplicated by ID. If you enqueue the same ID twice, it will only be processed once.
+    </Tip>
+  </Step>
+  
+  <Step title="Enqueue and wait for results">
+    For request/response patterns, use `enqueueAndWait()`:
+    
+    ```typescript index.ts
+    // Or wait for the result
+    const result = await queue.enqueueAndWait('email-2', { email: 'another@example.com' }, {
+      timeout: 30000,
+      resultTTL: 24 * 60 * 60 * 1000 // keep this result for 24h
+    })
+    console.log('Result:', result) // { sent: true }
+    ```
+    
+    This will:
+    1. Enqueue the job
+    2. Wait for it to be processed
+    3. Return the result (or throw if it fails)
+  </Step>
+  
+  <Step title="Graceful shutdown">
+    Stop the queue gracefully, waiting for in-flight jobs to complete:
+    
+    ```typescript index.ts
+    // Graceful shutdown
+    await queue.stop()
+    console.log('Queue stopped gracefully')
+    ```
+  </Step>
+</Steps>
+
+## Complete Working Code
+
+Here's the full example in one file:
+
+```typescript index.ts
+import { Queue, MemoryStorage } from '@platformatic/job-queue'
+
+// Create a queue with in-memory storage
+const storage = new MemoryStorage()
+const queue = new Queue<{ email: string }, { sent: boolean }>({
+  storage,
+  concurrency: 5
+})
+
+// Register a job handler
+queue.execute(async (job) => {
+  console.log(`Processing job ${job.id}:`, job.payload)
+  // Send email...
+  return { sent: true }
+})
+
+// Start the queue
+await queue.start()
+
+// Enqueue jobs
+await queue.enqueue('email-1', { email: 'user@example.com' })
+
+// Optional per-job TTL override for cached result/error
+await queue.enqueue('email-ttl', { email: 'ttl@example.com' }, {
+  resultTTL: 5 * 60 * 1000 // 5 minutes
+})
+
+// Or wait for the result
+const result = await queue.enqueueAndWait('email-2', { email: 'another@example.com' }, {
+  timeout: 30000,
+  resultTTL: 24 * 60 * 60 * 1000 // keep this result for 24h
+})
+console.log('Result:', result) // { sent: true }
+
+// Graceful shutdown
+await queue.stop()
+```
+
+## Run the Example
+
+Save the code above as `index.ts` and run it:
+
+```bash
+node --experimental-strip-types index.ts
+```
+
+### Expected Output
+
+```
+Queue started and ready to process jobs
+Processing job email-1: { email: 'user@example.com' }
+Job enqueued
+Processing job email-ttl: { email: 'ttl@example.com' }
+Processing job email-2: { email: 'another@example.com' }
+Result: { sent: true }
+Queue stopped gracefully
+```
+
+## Understanding the Flow
+
+<Accordion title="How enqueue() works">
+  When you call `enqueue(id, payload, options?)`, the library:
+  1. Checks if a job with that ID already exists
+  2. If it's new, serializes the payload and adds it to the queue
+  3. Returns immediately with status `'queued'`, `'duplicate'`, or `'completed'`
+  4. The consumer picks up the job asynchronously
 </Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
+<Accordion title="How enqueueAndWait() works">
+  When you call `enqueueAndWait(id, payload, options?)`, the library:
+  1. Enqueues the job (same as `enqueue()`)
+  2. Subscribes to completion events for that job ID
+  3. Waits until the job completes or times out
+  4. Returns the result or throws an error
+  
+  This is perfect for request/response patterns across services.
 </Accordion>
 
-## Next steps
+<Accordion title="How deduplication works">
+  Jobs are identified by their ID. When you enqueue a job:
+  - If no job with that ID exists, it's queued
+  - If a job is queued/processing, you get status `'duplicate'`
+  - If a job completed, you get the cached result immediately
+  
+  Results are cached for `resultTTL` milliseconds (default: 1 hour).
+</Accordion>
 
-Now that you have your docs running, explore these key features:
+<Accordion title="How graceful shutdown works">
+  When you call `stop()`:
+  1. The queue stops accepting new jobs
+  2. In-flight jobs continue processing
+  3. The queue waits up to `visibilityTimeout` for jobs to complete
+  4. Any incomplete jobs are returned to the queue
+  5. Storage is disconnected
+</Accordion>
+
+## Configuration Options
+
+The `Queue` constructor accepts these options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `storage` | `Storage` | *required* | Storage backend instance |
+| `workerId` | `string` | `uuid()` | Unique identifier for this worker |
+| `concurrency` | `number` | `1` | Number of jobs to process in parallel |
+| `maxRetries` | `number` | `3` | Maximum retry attempts for failed jobs |
+| `blockTimeout` | `number` | `5` | Seconds to wait when polling for jobs |
+| `visibilityTimeout` | `number` | `30000` | Milliseconds before a processing job is considered stalled |
+| `resultTTL` | `number` | `3600000` | Milliseconds to cache job results (1 hour) |
+| `logger` | `pino.Logger` | `abstractLogger` | Logger instance |
+
+## Error Handling
+
+Handle errors using try-catch with typed error classes:
+
+```typescript
+import { TimeoutError, JobFailedError } from '@platformatic/job-queue'
+
+try {
+  const result = await queue.enqueueAndWait('job-1', payload, {
+    timeout: 10000
+  })
+  console.log('Got result:', result)
+} catch (error) {
+  if (error instanceof TimeoutError) {
+    console.log('Request timed out')
+  } else if (error instanceof JobFailedError) {
+    console.log('Job failed:', error.originalError)
+  }
+}
+```
+
+<Warning>
+Jobs that fail will be retried up to `maxRetries` times with exponential backoff. After all retries are exhausted, they enter the `'failed'` state.
+</Warning>
+
+## Listening to Events
+
+The queue emits events for monitoring:
+
+```typescript
+// Job events
+queue.on('enqueued', (id) => {
+  console.log(`Job ${id} was enqueued`)
+})
+
+queue.on('completed', (id, result) => {
+  console.log(`Job ${id} completed:`, result)
+})
+
+queue.on('failed', (id, error) => {
+  console.log(`Job ${id} failed:`, error.message)
+})
+
+queue.on('failing', (id, error, attempt) => {
+  console.log(`Job ${id} failed attempt ${attempt}, will retry:`, error.message)
+})
+
+// Lifecycle events
+queue.on('started', () => {
+  console.log('Queue started')
+})
+
+queue.on('stopped', () => {
+  console.log('Queue stopped')
+})
+
+// Error events
+queue.on('error', (error) => {
+  console.error('Queue error:', error)
+})
+```
+
+## Next Steps
+
+Now that you have a working queue, explore more advanced features:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Storage Backends" icon="database" href="/core-concepts/storage">
+    Learn about Redis, FileStorage, and MemoryStorage
+  </Card>
+  
+  <Card title="Queue Configuration" icon="sliders" href="/core-concepts/queue">
+    Configure retries, timeouts, and concurrency
+  </Card>
+  
+  <Card title="Stalled Job Recovery" icon="heart-pulse" href="/core-concepts/reaper">
+    Set up the Reaper for automatic recovery
+  </Card>
+  
+  <Card title="Producer/Consumer" icon="split" href="/patterns/producer-consumer">
+    Separate producers and consumers across services
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

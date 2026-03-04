@@ -1,0 +1,538 @@
+---
+title: Types
+description: TypeScript types and interfaces for Platformatic Job Queue
+---
+
+## Core Types
+
+### QueueConfig
+
+Configuration object for creating a Queue instance.
+
+<ResponseField name="storage" type="Storage" required>
+  Storage backend for the queue (Memory, Redis, or File)
+</ResponseField>
+
+<ResponseField name="afterExecution" type="AfterExecutionHook<TPayload, TResult>">
+  Hook called after job execution and before persisting terminal state
+</ResponseField>
+
+<ResponseField name="payloadSerde" type="Serde<TPayload>">
+  Payload serializer (default: JSON)
+</ResponseField>
+
+<ResponseField name="resultSerde" type="Serde<TResult>">
+  Result serializer (default: JSON)
+</ResponseField>
+
+<ResponseField name="workerId" type="string">
+  Unique worker ID (default: random UUID)
+</ResponseField>
+
+<ResponseField name="concurrency" type="number" default="1">
+  Number of jobs to process in parallel
+</ResponseField>
+
+<ResponseField name="blockTimeout" type="number" default="5">
+  Blocking dequeue timeout in seconds
+</ResponseField>
+
+<ResponseField name="maxRetries" type="number" default="3">
+  Default maximum retry attempts for failed jobs
+</ResponseField>
+
+<ResponseField name="visibilityTimeout" type="number" default="30000">
+  Max processing time before job is considered stalled in milliseconds
+</ResponseField>
+
+<ResponseField name="processingQueueTTL" type="number" default="604800000">
+  TTL for processing queue keys in milliseconds (default: 7 days)
+</ResponseField>
+
+<ResponseField name="resultTTL" type="number" default="3600000">
+  TTL for stored results and errors in milliseconds (default: 1 hour)
+</ResponseField>
+
+<ResponseField name="logger" type="Logger">
+  Pino logger instance (default: no-op logger)
+</ResponseField>
+
+```typescript
+import { Queue, RedisStorage } from '@platformatic/job-queue'
+import Redis from 'ioredis'
+
+const queue = new Queue({
+  storage: new RedisStorage(new Redis()),
+  concurrency: 10,
+  maxRetries: 5,
+  resultTTL: 7200000, // 2 hours
+  logger: console
+})
+```
+
+---
+
+## Job Types
+
+### Job
+
+Job object passed to the handler function.
+
+<ResponseField name="id" type="string" required>
+  Unique job identifier
+</ResponseField>
+
+<ResponseField name="payload" type="TPayload" required>
+  Job payload data
+</ResponseField>
+
+<ResponseField name="attempts" type="number" required>
+  Number of times this job has been attempted
+</ResponseField>
+
+<ResponseField name="signal" type="AbortSignal" required>
+  Abort signal for cancellation support
+</ResponseField>
+
+```typescript
+queue.process(async (job) => {
+  console.log(`Processing job ${job.id}`);
+  console.log(`Attempt ${job.attempts}`);
+  console.log(`Payload:`, job.payload);
+  
+  // Check if cancelled
+  if (job.signal.aborted) {
+    throw new Error('Job was cancelled');
+  }
+  
+  return { success: true };
+});
+```
+
+### QueueMessage
+
+Internal message structure stored in the queue.
+
+<ResponseField name="id" type="string" required>
+  Unique message identifier
+</ResponseField>
+
+<ResponseField name="payload" type="TPayload" required>
+  Message payload
+</ResponseField>
+
+<ResponseField name="createdAt" type="number" required>
+  Timestamp when message was created (milliseconds since epoch)
+</ResponseField>
+
+<ResponseField name="attempts" type="number" required>
+  Current attempt count
+</ResponseField>
+
+<ResponseField name="maxAttempts" type="number" required>
+  Maximum number of retry attempts
+</ResponseField>
+
+<ResponseField name="resultTTL" type="number">
+  TTL for result/error in milliseconds
+</ResponseField>
+
+<ResponseField name="correlationId" type="string">
+  Optional correlation ID for tracking related jobs
+</ResponseField>
+
+---
+
+## Status Types
+
+### MessageState
+
+Possible states for a job in the queue.
+
+```typescript
+type MessageState = 'queued' | 'processing' | 'failing' | 'completed' | 'failed'
+```
+
+- **queued**: Job is waiting to be processed
+- **processing**: Job is currently being processed
+- **failing**: Job failed and will be retried
+- **completed**: Job completed successfully
+- **failed**: Job failed permanently after all retries
+
+### MessageStatus
+
+Detailed status information for a job.
+
+<ResponseField name="id" type="string" required>
+  Job identifier
+</ResponseField>
+
+<ResponseField name="state" type="MessageState" required>
+  Current job state
+</ResponseField>
+
+<ResponseField name="createdAt" type="number" required>
+  Timestamp when job was created (milliseconds since epoch)
+</ResponseField>
+
+<ResponseField name="attempts" type="number" required>
+  Number of execution attempts
+</ResponseField>
+
+<ResponseField name="result" type="TResult">
+  Job result (if completed successfully)
+</ResponseField>
+
+<ResponseField name="error" type="SerializedError">
+  Error information (if failed)
+</ResponseField>
+
+```typescript
+const status = await queue.getStatus('job-123');
+
+if (status) {
+  console.log(`Job ${status.id} is ${status.state}`);
+  
+  if (status.state === 'completed') {
+    console.log('Result:', status.result);
+  } else if (status.state === 'failed') {
+    console.log('Error:', status.error?.message);
+  }
+}
+```
+
+---
+
+## Enqueue Types
+
+### EnqueueOptions
+
+Options for enqueuing a job.
+
+<ResponseField name="maxAttempts" type="number">
+  Maximum retry attempts (overrides queue default)
+</ResponseField>
+
+<ResponseField name="resultTTL" type="number">
+  TTL for result/error in milliseconds (overrides queue default)
+</ResponseField>
+
+```typescript
+await queue.enqueue(
+  { task: 'send-email', to: 'user@example.com' },
+  { 
+    maxAttempts: 5,
+    resultTTL: 3600000 // 1 hour
+  }
+);
+```
+
+### EnqueueAndWaitOptions
+
+Options for enqueuing a job and waiting for completion.
+
+<ResponseField name="maxAttempts" type="number">
+  Maximum retry attempts (overrides queue default)
+</ResponseField>
+
+<ResponseField name="resultTTL" type="number">
+  TTL for result/error in milliseconds (overrides queue default)
+</ResponseField>
+
+<ResponseField name="timeout" type="number">
+  Maximum time to wait for result in milliseconds
+</ResponseField>
+
+```typescript
+try {
+  const result = await queue.enqueueAndWait(
+    { task: 'generate-report' },
+    { 
+      timeout: 30000,  // 30 seconds
+      maxAttempts: 3
+    }
+  );
+  console.log('Report generated:', result);
+} catch (error) {
+  if (error instanceof TimeoutError) {
+    console.error('Report generation timed out');
+  }
+}
+```
+
+### EnqueueResult
+
+Result type returned by the `enqueue()` method.
+
+```typescript
+type EnqueueResult<TResult = unknown> =
+  | { status: 'queued' }
+  | { status: 'duplicate'; existingState: MessageState }
+  | { status: 'completed'; result: TResult }
+```
+
+<ResponseField name="status" type="'queued' | 'duplicate' | 'completed'" required>
+  Result status
+</ResponseField>
+
+<ResponseField name="existingState" type="MessageState">
+  Current state of existing job (when status is 'duplicate')
+</ResponseField>
+
+<ResponseField name="result" type="TResult">
+  Job result (when status is 'completed')
+</ResponseField>
+
+```typescript
+const result = await queue.enqueue(
+  { task: 'process-order' },
+  { id: 'order-123' }
+);
+
+if (result.status === 'queued') {
+  console.log('Job queued successfully');
+} else if (result.status === 'duplicate') {
+  console.log(`Job already exists with state: ${result.existingState}`);
+} else if (result.status === 'completed') {
+  console.log('Job already completed:', result.result);
+}
+```
+
+---
+
+## Operation Result Types
+
+### CancelResult
+
+Result type returned by the `cancel()` method.
+
+```typescript
+type CancelResult =
+  | { status: 'cancelled' }
+  | { status: 'not_found' }
+  | { status: 'processing' }
+  | { status: 'completed' }
+```
+
+<ResponseField name="status" type="'cancelled' | 'not_found' | 'processing' | 'completed'" required>
+  Cancellation result status
+</ResponseField>
+
+- **cancelled**: Job was successfully cancelled
+- **not_found**: Job does not exist
+- **processing**: Job is currently being processed and cannot be cancelled
+- **completed**: Job already completed
+
+```typescript
+const result = await queue.cancel('job-123');
+
+switch (result.status) {
+  case 'cancelled':
+    console.log('Job cancelled');
+    break;
+  case 'processing':
+    console.log('Job is currently processing, cannot cancel');
+    break;
+  case 'completed':
+    console.log('Job already completed');
+    break;
+  case 'not_found':
+    console.log('Job not found');
+    break;
+}
+```
+
+### UpdateResultTTLResult
+
+Result type returned by the `updateResultTTL()` method.
+
+```typescript
+type UpdateResultTTLResult =
+  | { status: 'updated' }
+  | { status: 'not_found' }
+  | { status: 'not_terminal' }
+  | { status: 'missing_payload' }
+```
+
+<ResponseField name="status" type="'updated' | 'not_found' | 'not_terminal' | 'missing_payload'" required>
+  Update result status
+</ResponseField>
+
+- **updated**: TTL updated successfully
+- **not_found**: Job does not exist
+- **not_terminal**: Job is not in a terminal state (completed/failed)
+- **missing_payload**: Terminal state exists but payload is missing
+
+```typescript
+const result = await queue.updateResultTTL('job-123', 7200000); // 2 hours
+
+if (result.status === 'updated') {
+  console.log('TTL updated successfully');
+} else if (result.status === 'not_terminal') {
+  console.log('Cannot update TTL: job is still processing');
+}
+```
+
+---
+
+## Hook Types
+
+### AfterExecutionContext
+
+Context object passed to the `afterExecution` hook.
+
+<ResponseField name="id" type="string" required>
+  Job identifier
+</ResponseField>
+
+<ResponseField name="payload" type="TPayload" required>
+  Job payload
+</ResponseField>
+
+<ResponseField name="attempts" type="number" required>
+  Number of execution attempts
+</ResponseField>
+
+<ResponseField name="maxAttempts" type="number" required>
+  Maximum number of attempts
+</ResponseField>
+
+<ResponseField name="createdAt" type="number" required>
+  Timestamp when job was created (milliseconds since epoch)
+</ResponseField>
+
+<ResponseField name="status" type="'completed' | 'failed'" required>
+  Job execution outcome
+</ResponseField>
+
+<ResponseField name="result" type="TResult">
+  Job result (if completed successfully)
+</ResponseField>
+
+<ResponseField name="error" type="Error">
+  Error object (if failed)
+</ResponseField>
+
+<ResponseField name="ttl" type="number" required>
+  TTL for result/error in milliseconds
+</ResponseField>
+
+<ResponseField name="workerId" type="string" required>
+  Worker that processed the job
+</ResponseField>
+
+<ResponseField name="startedAt" type="number" required>
+  Timestamp when execution started (milliseconds since epoch)
+</ResponseField>
+
+<ResponseField name="finishedAt" type="number" required>
+  Timestamp when execution finished (milliseconds since epoch)
+</ResponseField>
+
+<ResponseField name="durationMs" type="number" required>
+  Execution duration in milliseconds
+</ResponseField>
+
+### AfterExecutionHook
+
+Function type for the `afterExecution` hook.
+
+```typescript
+type AfterExecutionHook<TPayload, TResult> = (
+  context: AfterExecutionContext<TPayload, TResult>
+) => void | Promise<void>
+```
+
+The hook is called after job execution completes (success or failure) but before the terminal state is persisted.
+
+```typescript
+const queue = new Queue({
+  storage,
+  afterExecution: async (context) => {
+    // Log to external system
+    await logger.info({
+      jobId: context.id,
+      status: context.status,
+      duration: context.durationMs,
+      workerId: context.workerId
+    });
+    
+    // Send metrics
+    if (context.status === 'completed') {
+      metrics.increment('jobs.completed');
+      metrics.timing('jobs.duration', context.durationMs);
+    } else {
+      metrics.increment('jobs.failed');
+      console.error(`Job ${context.id} failed:`, context.error);
+    }
+  }
+});
+```
+
+---
+
+## Internal Types
+
+### SerializedError
+
+Serialized error information stored with failed jobs.
+
+<ResponseField name="message" type="string" required>
+  Error message
+</ResponseField>
+
+<ResponseField name="code" type="string">
+  Error code
+</ResponseField>
+
+<ResponseField name="stack" type="string">
+  Stack trace
+</ResponseField>
+
+### JobHandler
+
+Function type for job handlers.
+
+```typescript
+type JobHandler<TPayload, TResult> =
+  | ((job: Job<TPayload>) => Promise<TResult>)
+  | ((job: Job<TPayload>, callback: (err: Error | null, result?: TResult) => void) => void)
+```
+
+Supports both async/await and callback-style handlers.
+
+```typescript
+// Async handler
+queue.process(async (job) => {
+  return await processData(job.payload);
+});
+
+// Callback handler
+queue.process((job, callback) => {
+  processData(job.payload, (err, result) => {
+    if (err) callback(err);
+    else callback(null, result);
+  });
+});
+```
+
+### QueueEvents
+
+Event types emitted by the Queue instance.
+
+```typescript
+interface QueueEvents<TResult> {
+  started: []
+  stopped: []
+  error: [error: Error]
+  enqueued: [id: string]
+  completed: [id: string, result: TResult]
+  failed: [id: string, error: Error]
+  failing: [id: string, error: Error, attempt: number]
+  requeued: [id: string]
+  cancelled: [id: string]
+  stalled: [id: string]
+}
+```
+
+See [Events](/api/queue#events) for detailed event documentation.

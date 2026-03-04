@@ -1,0 +1,210 @@
+---
+title: Installation
+description: Install Platformatic Job Queue and set up your development environment
+---
+
+# Installation
+
+This guide walks you through installing Platformatic Job Queue and verifying your setup.
+
+## System Requirements
+
+Before installing, ensure your system meets these requirements:
+
+- **Node.js 22.19.0 or later** - Required for native TypeScript support
+- **Redis 7+ or Valkey 8+** - Optional, only if using RedisStorage backend
+
+<Note>
+Platformatic Job Queue uses Node.js 22.19+'s native TypeScript type stripping feature, which provides zero-overhead type safety without a build step for TypeScript files.
+</Note>
+
+## Install the Package
+
+Install `@platformatic/job-queue` using your preferred package manager:
+
+<CodeGroup>
+```bash npm
+npm install @platformatic/job-queue
+```
+
+```bash yarn
+yarn add @platformatic/job-queue
+```
+
+```bash pnpm
+pnpm add @platformatic/job-queue
+```
+</CodeGroup>
+
+The package includes TypeScript type definitions and requires no additional configuration.
+
+## Optional Dependencies
+
+The library includes optional dependencies that are automatically loaded when needed:
+
+### Redis/Valkey Support
+
+For production deployments using Redis or Valkey storage:
+
+<CodeGroup>
+```bash npm
+npm install iovalkey
+```
+
+```bash yarn
+yarn add iovalkey
+```
+
+```bash pnpm
+pnpm add iovalkey
+```
+</CodeGroup>
+
+<Tip>
+`iovalkey` is a high-performance Redis/Valkey client. The library will automatically use it when you instantiate `RedisStorage`.
+</Tip>
+
+### Filesystem Storage Support
+
+For single-node deployments using filesystem storage:
+
+<CodeGroup>
+```bash npm
+npm install fast-write-atomic
+```
+
+```bash yarn
+yarn add fast-write-atomic
+```
+
+```bash pnpm
+pnpm add fast-write-atomic
+```
+</CodeGroup>
+
+<Note>
+`fast-write-atomic` ensures atomic file writes in `FileStorage`. It's automatically loaded when you use the filesystem backend.
+</Note>
+
+## Verify Installation
+
+Verify your installation by creating a simple test file:
+
+<Steps>
+  <Step title="Create a test file">
+    Create a new file called `test-queue.ts`:
+    
+    ```typescript test-queue.ts
+    import { Queue, MemoryStorage } from '@platformatic/job-queue'
+    
+    const storage = new MemoryStorage()
+    const queue = new Queue({ storage })
+    
+    console.log('Platformatic Job Queue installed successfully!')
+    ```
+  </Step>
+  
+  <Step title="Run the test">
+    Execute the file with Node.js:
+    
+    ```bash
+    node --experimental-strip-types test-queue.ts
+    ```
+    
+    You should see:
+    ```
+    Platformatic Job Queue installed successfully!
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+Node.js 22.19+ requires the `--experimental-strip-types` flag to run TypeScript files directly. For production, you should compile TypeScript to JavaScript using `tsc` or your preferred build tool.
+</Warning>
+
+## Project Setup
+
+For a production project, add a build script to your `package.json`:
+
+```json package.json
+{
+  "name": "my-queue-app",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "node --experimental-strip-types src/index.ts"
+  },
+  "dependencies": {
+    "@platformatic/job-queue": "^0.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}
+```
+
+## TypeScript Configuration
+
+Create a `tsconfig.json` for TypeScript compilation:
+
+```json tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "node",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
+```
+
+## Development with Redis
+
+For local development with Redis, you can use Docker:
+
+```bash
+docker run -d --name redis -p 6379:6379 redis:7-alpine
+```
+
+Or use Docker Compose:
+
+```yaml docker-compose.yml
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:
+```
+
+Start the services:
+
+```bash
+docker-compose up -d
+```
+
+## Next Steps
+
+Now that you have Platformatic Job Queue installed, you're ready to build your first queue:
+
+<Card title="Quick Start Guide" icon="rocket" href="/quickstart">
+  Learn how to create a queue, process jobs, and handle results
+</Card>

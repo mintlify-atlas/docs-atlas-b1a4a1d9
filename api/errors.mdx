@@ -1,0 +1,464 @@
+---
+title: Errors
+description: Error classes for Platformatic Job Queue
+---
+
+## Base Error
+
+### JobQueueError
+
+Base error class for all job queue errors.
+
+<ResponseField name="message" type="string" required>
+  Error message
+</ResponseField>
+
+<ResponseField name="code" type="string" required>
+  Error code identifier
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Error class name ('JobQueueError')
+</ResponseField>
+
+<ResponseField name="stack" type="string">
+  Stack trace
+</ResponseField>
+
+All other error classes extend from `JobQueueError`.
+
+```typescript
+import { JobQueueError } from '@platformatic/job-queue'
+
+try {
+  await queue.enqueueAndWait(payload, { timeout: 5000 });
+} catch (error) {
+  if (error instanceof JobQueueError) {
+    console.error(`Queue error [${error.code}]: ${error.message}`);
+  }
+}
+```
+
+---
+
+## Timeout Errors
+
+### TimeoutError
+
+Thrown when `enqueueAndWait()` exceeds the specified timeout.
+
+<ResponseField name="message" type="string" required>
+  Error message including job ID and timeout duration
+</ResponseField>
+
+<ResponseField name="code" type="string" required>
+  Error code: `'TIMEOUT'`
+</ResponseField>
+
+<ResponseField name="jobId" type="string" required>
+  ID of the job that timed out
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Error class name: `'TimeoutError'`
+</ResponseField>
+
+**When thrown:**
+- Job doesn't complete within the specified timeout period in `enqueueAndWait()`
+- The job continues processing in the background after timeout
+
+```typescript
+import { TimeoutError } from '@platformatic/job-queue'
+
+try {
+  const result = await queue.enqueueAndWait(
+    { task: 'long-running-job' },
+    { timeout: 5000 } // 5 seconds
+  );
+  console.log('Result:', result);
+} catch (error) {
+  if (error instanceof TimeoutError) {
+    console.error(`Job ${error.jobId} timed out`);
+    // Job is still running, you can check status later
+    const status = await queue.getStatus(error.jobId);
+    console.log('Current status:', status?.state);
+  }
+}
+```
+
+---
+
+## Retry Errors
+
+### MaxRetriesError
+
+Thrown when a job fails permanently after exhausting all retry attempts.
+
+<ResponseField name="message" type="string" required>
+  Error message including job ID, attempts, and last error message
+</ResponseField>
+
+<ResponseField name="code" type="string" required>
+  Error code: `'MAX_RETRIES'`
+</ResponseField>
+
+<ResponseField name="jobId" type="string" required>
+  ID of the failed job
+</ResponseField>
+
+<ResponseField name="attempts" type="number" required>
+  Number of attempts made before permanent failure
+</ResponseField>
+
+<ResponseField name="lastError" type="Error" required>
+  The original error from the final attempt
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Error class name: `'MaxRetriesError'`
+</ResponseField>
+
+**When thrown:**
+- Job handler throws an error on every retry attempt
+- Total attempts reach `maxAttempts` (configured in queue or per-job)
+- Thrown by `enqueueAndWait()` when job fails permanently
+
+```typescript
+import { MaxRetriesError } from '@platformatic/job-queue'
+
+try {
+  const result = await queue.enqueueAndWait(
+    { userId: 123, action: 'send-notification' },
+    { maxAttempts: 3 }
+  );
+} catch (error) {
+  if (error instanceof MaxRetriesError) {
+    console.error(`Job ${error.jobId} failed after ${error.attempts} attempts`);
+    console.error('Last error:', error.lastError.message);
+    
+    // Log to error tracking service
+    await errorTracker.log({
+      jobId: error.jobId,
+      attempts: error.attempts,
+      error: error.lastError
+    });
+  }
+}
+
+// Also emitted as 'failed' event
+queue.on('failed', (id, error) => {
+  console.error(`Job ${id} failed permanently:`, error);
+});
+```
+
+---
+
+## Job State Errors
+
+### JobNotFoundError
+
+Thrown when attempting to operate on a non-existent job.
+
+<ResponseField name="message" type="string" required>
+  Error message including job ID
+</ResponseField>
+
+<ResponseField name="code" type="string" required>
+  Error code: `'JOB_NOT_FOUND'`
+</ResponseField>
+
+<ResponseField name="jobId" type="string" required>
+  ID of the job that was not found
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Error class name: `'JobNotFoundError'`
+</ResponseField>
+
+**When thrown:**
+- Calling `getStatus()` with an invalid or expired job ID
+- Job result/error expired due to TTL
+- Invalid job ID provided
+
+```typescript
+import { JobNotFoundError } from '@platformatic/job-queue'
+
+try {
+  const status = await queue.getStatus('invalid-job-id');
+} catch (error) {
+  if (error instanceof JobNotFoundError) {
+    console.error(`Job ${error.jobId} not found or expired`);
+  }
+}
+```
+
+### JobCancelledError
+
+Thrown when waiting for a job that was cancelled.
+
+<ResponseField name="message" type="string" required>
+  Error message including job ID
+</ResponseField>
+
+<ResponseField name="code" type="string" required>
+  Error code: `'JOB_CANCELLED'`
+</ResponseField>
+
+<ResponseField name="jobId" type="string" required>
+  ID of the cancelled job
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Error class name: `'JobCancelledError'`
+</ResponseField>
+
+**When thrown:**
+- `enqueueAndWait()` is waiting for a job that gets cancelled
+- Job is cancelled while handler is checking status
+
+```typescript
+import { JobCancelledError } from '@platformatic/job-queue'
+
+// Start a long-running job
+const waitPromise = queue.enqueueAndWait(
+  { task: 'process-video' },
+  { id: 'video-123', timeout: 60000 }
+);
+
+// Cancel it from another part of your code
+setTimeout(() => {
+  queue.cancel('video-123');
+}, 5000);
+
+try {
+  await waitPromise;
+} catch (error) {
+  if (error instanceof JobCancelledError) {
+    console.log(`Job ${error.jobId} was cancelled`);
+  }
+}
+```
+
+### JobFailedError
+
+Thrown when `enqueueAndWait()` encounters a job that failed.
+
+<ResponseField name="message" type="string" required>
+  Error message including job ID and original error message
+</ResponseField>
+
+<ResponseField name="code" type="string" required>
+  Error code: `'JOB_FAILED'`
+</ResponseField>
+
+<ResponseField name="jobId" type="string" required>
+  ID of the failed job
+</ResponseField>
+
+<ResponseField name="originalError" type="string" required>
+  Original error message from the job handler
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Error class name: `'JobFailedError'`
+</ResponseField>
+
+**When thrown:**
+- `enqueueAndWait()` waits for a job that fails permanently
+- Different from `MaxRetriesError` - this wraps the serialized error message
+
+```typescript
+import { JobFailedError } from '@platformatic/job-queue'
+
+try {
+  const result = await queue.enqueueAndWait(
+    { userId: 'invalid-id' },
+    { timeout: 10000 }
+  );
+} catch (error) {
+  if (error instanceof JobFailedError) {
+    console.error(`Job ${error.jobId} failed`);
+    console.error('Error from handler:', error.originalError);
+  }
+}
+```
+
+---
+
+## Storage Errors
+
+### StorageError
+
+Thrown when a storage operation fails.
+
+<ResponseField name="message" type="string" required>
+  Error message describing the storage failure
+</ResponseField>
+
+<ResponseField name="code" type="string" required>
+  Error code: `'STORAGE_ERROR'`
+</ResponseField>
+
+<ResponseField name="cause" type="Error">
+  The underlying error from the storage backend
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Error class name: `'StorageError'`
+</ResponseField>
+
+**When thrown:**
+- Redis connection failures
+- File system errors (FileStorage)
+- Network issues with storage backend
+- Storage backend crashes or becomes unavailable
+
+```typescript
+import { StorageError } from '@platformatic/job-queue'
+import { RedisStorage } from '@platformatic/job-queue'
+import Redis from 'ioredis'
+
+const redis = new Redis({
+  host: 'localhost',
+  port: 6379,
+  retryStrategy: (times) => {
+    if (times > 3) return null; // Stop retrying
+    return Math.min(times * 100, 2000);
+  }
+});
+
+const queue = new Queue({
+  storage: new RedisStorage(redis)
+});
+
+try {
+  await queue.enqueue({ task: 'process-data' });
+} catch (error) {
+  if (error instanceof StorageError) {
+    console.error('Storage operation failed:', error.message);
+    if (error.cause) {
+      console.error('Underlying error:', error.cause.message);
+    }
+    
+    // Attempt reconnection or fallback
+    await handleStorageFailure(error);
+  }
+}
+
+// Also emitted as 'error' event
+queue.on('error', (error) => {
+  if (error instanceof StorageError) {
+    console.error('Queue storage error:', error);
+  }
+});
+```
+
+---
+
+## Error Handling Patterns
+
+### Comprehensive Error Handling
+
+```typescript
+import {
+  JobQueueError,
+  TimeoutError,
+  MaxRetriesError,
+  JobCancelledError,
+  JobFailedError,
+  JobNotFoundError,
+  StorageError
+} from '@platformatic/job-queue'
+
+async function processWithErrorHandling(payload: any) {
+  try {
+    const result = await queue.enqueueAndWait(
+      payload,
+      { 
+        timeout: 30000,
+        maxAttempts: 3
+      }
+    );
+    return result;
+  } catch (error) {
+    if (error instanceof TimeoutError) {
+      // Job timed out but may still complete
+      console.warn(`Job ${error.jobId} timed out, checking status later`);
+      scheduleStatusCheck(error.jobId);
+      throw error;
+    } 
+    else if (error instanceof MaxRetriesError) {
+      // Job failed permanently
+      console.error(`Job failed after ${error.attempts} attempts`);
+      await notifyAdmin(error);
+      throw error;
+    } 
+    else if (error instanceof JobCancelledError) {
+      // Job was cancelled
+      console.log(`Job ${error.jobId} was cancelled`);
+      return null;
+    } 
+    else if (error instanceof JobFailedError) {
+      // Job failed with specific error
+      console.error(`Job failed: ${error.originalError}`);
+      throw error;
+    } 
+    else if (error instanceof StorageError) {
+      // Storage backend issue
+      console.error('Storage error:', error.cause);
+      await alertOps(error);
+      throw error;
+    } 
+    else if (error instanceof JobQueueError) {
+      // Other queue errors
+      console.error(`Queue error [${error.code}]: ${error.message}`);
+      throw error;
+    } 
+    else {
+      // Unexpected error
+      console.error('Unexpected error:', error);
+      throw error;
+    }
+  }
+}
+```
+
+### Retry with Backoff
+
+```typescript
+async function enqueueWithRetry(payload: any, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await queue.enqueue(payload);
+    } catch (error) {
+      if (error instanceof StorageError && i < retries - 1) {
+        // Wait with exponential backoff
+        await new Promise(resolve => 
+          setTimeout(resolve, Math.pow(2, i) * 1000)
+        );
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+```
+
+### Graceful Degradation
+
+```typescript
+async function enqueueOrFallback(payload: any) {
+  try {
+    await queue.enqueue(payload);
+    return { status: 'queued' };
+  } catch (error) {
+    if (error instanceof StorageError) {
+      // Fallback to synchronous processing
+      console.warn('Queue unavailable, processing synchronously');
+      const result = await processJobDirectly(payload);
+      return { status: 'completed', result };
+    }
+    throw error;
+  }
+}
+```
